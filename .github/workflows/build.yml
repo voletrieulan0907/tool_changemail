@@ -2,6 +2,7 @@ name: Build and Release
 on:
   push:
     branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -14,108 +15,116 @@ jobs:
       with:
         python-version: '3.9'
     
-    - name: Install PyInstaller
-      run: pip install pyinstaller
-    
-    - name: Install additional dependencies (if needed)
+    - name: Install dependencies
       run: |
-        # Thêm các package cần thiết ở đây
-        # pip install requests
-        # pip install tkinter (usually built-in)
-      shell: powershell
+        pip install pyinstaller
+        if (Test-Path requirements.txt) { pip install -r requirements.txt } else { echo "No requirements.txt found, skipping..." }
     
     - name: Build application (folder mode)
       run: |
         pyinstaller --onedir --windowed --name="MyApp" app.py
-        # Thêm options khác nếu cần:
-        # --icon=icon.ico (nếu có icon)
-        # --add-data="data;data" (nếu có data files)
-      shell: powershell
+        # Hoặc có thể thêm icon: --icon=icon.ico
     
-    - name: Create folder structure
+    - name: Create internal folder structure
       run: |
-        # Tạo các folder chuyên nghiệp
-        New-Item -ItemType Directory -Force -Path "dist/MyApp/internal"
-        New-Item -ItemType Directory -Force -Path "dist/MyApp/config" 
-        New-Item -ItemType Directory -Force -Path "dist/MyApp/data"
-        New-Item -ItemType Directory -Force -Path "dist/MyApp/logs"
-        
-        # Copy files bổ sung (nếu có)
-        if (Test-Path "README.md") { Copy-Item "README.md" "dist/MyApp/" }
-        if (Test-Path "config.json") { Copy-Item "config.json" "dist/MyApp/config/" }
-        
-        # Tạo file version
-        $version = "${{ github.run_number }}.0.0"
-        "App Version: $version`nBuild: ${{ github.sha }}" | Out-File -FilePath "dist/MyApp/version.txt"
-        
-        # Tạo file thông tin
-        @"
-MyApp - Version $version
-
-Cấu trúc thư mục:
-├── MyApp.exe          # Ứng dụng chính
-├── internal/          # Các module nội bộ
-├── config/            # File cấu hình
-├── data/              # Dữ liệu ứng dụng
-├── logs/              # File log
-└── _internal/         # PyInstaller files
-
-Cách sử dụng:
-1. Chạy MyApp.exe
-2. Cấu hình trong folder config/
-3. Dữ liệu được lưu trong folder data/
-"@ | Out-File -FilePath "dist/MyApp/README.txt"
-      shell: powershell
+        mkdir dist/MyApp/internal
+        mkdir dist/MyApp/config
+        mkdir dist/MyApp/data
+        # Copy thêm files cần thiết
+        copy README.md dist/MyApp/ 2>nul || echo "No README found"
+        copy config.json dist/MyApp/config/ 2>nul || echo "No config found"
+        echo "App Version: ${{ github.sha }}" > dist/MyApp/version.txt
     
     - name: Create ZIP package
       run: |
         cd dist
-        Compress-Archive -Path MyApp -DestinationPath MyApp-v${{ github.run_number }}-windows.zip
-      shell: powershell
+        powershell Compress-Archive -Path MyApp -DestinationPath MyApp-windows.zip
     
-    - name: Upload artifacts
+    - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: MyApp-windows-build
-        path: dist/MyApp-v${{ github.run_number }}-windows.zip
+        name: MyApp-windows
+        path: dist/MyApp-windows.zip
     
-    - name: Create Release
+    - name: Create Release (if tag pushed)
+      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        tag_name: "v1.0.${{ github.run_number }}"
-        name: "MyApp v1.0.${{ github.run_number }}"
-        files: dist/MyApp-v${{ github.run_number }}-windows.zip
+        files: dist/MyApp-windows.zip
         draft: false
         prerelease: false
+        generate_release_notes: true
         body: |
-          ## 🚀 MyApp v1.0.${{ github.run_number }}
+          ## 🚀 Phiên bản mới
           
-          ### 📦 Tải xuống
-          - **MyApp-v${{ github.run_number }}-windows.zip** - Phiên bản Windows (folder structure)
+          ### Thay đổi
+          - Tự động build từ commit: ${{ github.sha }}
+          - Build time: ${{ github.run_number }}
           
-          ### 📁 Cấu trúc
+          ### Cài đặt
+          1. Tải file ZIP
+          2. Giải nén
+          3. Chạy MyApp.exe
+          
+          ### Cấu trúc thư mục
           ```
           MyApp/
-          ├── MyApp.exe          # Ứng dụng chính
-          ├── internal/          # Module nội bộ
-          ├── config/            # Cấu hình
-          ├── data/              # Dữ liệu
-          ├── logs/              # Log files
-          └── _internal/         # PyInstaller dependencies
+          ├── MyApp.exe
+          ├── internal/
+          ├── config/
+          ├── data/
+          └── _internal/ (PyInstaller files)
           ```
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Job riêng để tự động tạo release khi push code (không cần tag)
+  auto-release:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/')
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Get next version
+      id: version
+      run: |
+        # Lấy version hiện tại từ tags
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        echo "Latest tag: $LATEST_TAG"
+        
+        # Tăng version patch
+        NEW_VERSION=$(echo $LATEST_TAG | awk -F. '{$NF = $NF + 1;} 1' | sed 's/ /./g')
+        echo "New version: $NEW_VERSION"
+        echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+    
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: MyApp-windows
+        path: ./release
+    
+    - name: Create auto release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: "Auto Release ${{ steps.version.outputs.version }}"
+        files: ./release/MyApp-windows.zip
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## 🤖 Tự động phát hành
           
-          ### 🔧 Cài đặt
-          1. Tải file ZIP
-          2. Giải nén vào thư mục bất kỳ
-          3. Chạy `MyApp.exe`
+          Phiên bản này được tự động tạo từ commit mới nhất trên main branch.
           
-          ### 📊 Thông tin build
-          - **Commit:** ${{ github.sha }}
-          - **Build number:** ${{ github.run_number }}
-          - **Build time:** ${{ github.event.head_commit.timestamp }}
-          - **Commit message:** ${{ github.event.head_commit.message }}
+          **Commit:** ${{ github.sha }}
+          **Thời gian:** ${{ github.event.head_commit.timestamp }}
+          **Thông điệp:** ${{ github.event.head_commit.message }}
           
-          ### 🔄 API Update Check
-          Sử dụng endpoint: `https://api.github.com/repos/${{ github.repository }}/releases/latest`
+          ### 📦 Tải xuống
+          - `MyApp-windows.zip` - Phiên bản Windows (folder format)
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
