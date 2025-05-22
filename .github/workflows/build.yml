@@ -77,7 +77,8 @@ jobs:
           └── _internal/ (PyInstaller files)
           ```
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+
 
   # Job riêng để tự động tạo release khi push code (không cần tag)
   auto-release:
