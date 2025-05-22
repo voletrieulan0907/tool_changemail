@@ -27,13 +27,14 @@ jobs:
     
     - name: Create internal folder structure
       run: |
-        mkdir dist/MyApp/internal
-        mkdir dist/MyApp/config
-        mkdir dist/MyApp/data
-        # Copy thêm files cần thiết
-        copy README.md dist/MyApp/ 2>nul || echo "No README found"
-        copy config.json dist/MyApp/config/ 2>nul || echo "No config found"
-        echo "App Version: ${{ github.sha }}" > dist/MyApp/version.txt
+        New-Item -ItemType Directory -Force -Path "dist/MyApp/internal"
+        New-Item -ItemType Directory -Force -Path "dist/MyApp/config"
+        New-Item -ItemType Directory -Force -Path "dist/MyApp/data"
+        # Copy files nếu tồn tại
+        if (Test-Path "README.md") { Copy-Item "README.md" "dist/MyApp/" }
+        if (Test-Path "config.json") { Copy-Item "config.json" "dist/MyApp/config/" }
+        "App Version: ${{ github.sha }}" | Out-File -FilePath "dist/MyApp/version.txt"
+      shell: powershell
     
     - name: Create ZIP package
       run: |
