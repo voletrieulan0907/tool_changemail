@@ -79,7 +79,6 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
 
-
   # Job riêng để tự động tạo release khi push code (không cần tag)
   auto-release:
     runs-on: ubuntu-latest
