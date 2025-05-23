@@ -50,14 +50,14 @@ class Main:
         y = row * WINDOW_HEIGHT
         self.driver.set_window_position(x, y)
 
-    def wait_and_click(self, xpath, timeout=10):
+    def wait_and_click(self, xpath, timeout=120):
         element = WebDriverWait(self.driver, timeout).until(
             EC.element_to_be_clickable((By.XPATH, xpath))
         )
         element.click()
         sleep(1.5)
 
-    def wait_and_send_keys(self, xpath, keys, timeout=10):
+    def wait_and_send_keys(self, xpath, keys, timeout=120):
         def human_typing(element, text, delay_range=(0.1, 0.3)):
             for char in text:
                 element.send_keys(char)
