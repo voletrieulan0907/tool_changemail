@@ -9,10 +9,13 @@ import pyperclip
 import random
 import string
 import time
+import requests
+from supabase import create_client
 import os
 import json
 import sys
 from worker_module import WorkerThread
+
 
 class MailToolApp(QMainWindow):
     def __init__(self):
@@ -1094,9 +1097,25 @@ class MailToolApp(QMainWindow):
     def copy_to_clipboard(self, text):
         clipboard = QApplication.clipboard()
         clipboard.setText(text)
+# QMessageBox.critical(self, "Lỗi", f"Không thể lưu file: {str(e)}")
+app = QApplication(sys.argv)
+base_url = "https://cgogqyorfzpxaiotscfp.supabase.co"  # Thay đổi thành URL API thực tế
+token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNnb2dxeW9yZnpweGFpb3RzY2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc5ODMyMzcsImV4cCI6MjA2MzU1OTIzN30.enehR9wGHJf1xKO7d4XBbmjfdm80EvBKzaaPO3NPVAM'
+key = 'a78d07d8-58ef-4528-9561-f96cd9fc6058'
+supabase = create_client(base_url, token)
+device_control_response = supabase.table("software_management").select("*").execute()
+found_device = False
+for device in device_control_response.data:
+    if device['id'] == key:
+        found_device = True
+        if device['update'] == 'update':
+            QMessageBox.critical(None, "Lỗi", "Có phiên bản mới vui lòng liên hệ admin để cập nhật!")
+            sys.exit()  # Thoát sau khi cảnh báo
+        else:
+            window = MailToolApp()
+            window.show()
+            sys.exit(app.exec_())
 
-if __name__ == "__main__": 
-    app = QApplication(sys.argv)
-    window = MailToolApp()
-    window.show()
-    sys.exit(app.exec_())
+if not found_device:
+    print("Key không hợp lệ")
+    sys.exit()
