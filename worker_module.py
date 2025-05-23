@@ -7,6 +7,7 @@ import tempfile
 from main import Main  # Import hàm selenium
 import os,sys
 
+
 class WorkerThread(QThread):
     update_status = pyqtSignal(int, str, str ,str)
     update_counts = pyqtSignal(int, int)
